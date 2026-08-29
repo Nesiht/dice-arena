@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Dice Arena",
+    "slug": "dice-arena",
+    "scheme": "dice-arena",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "platforms": ["android", "ios"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dicearena.app"
+    },
+    "android": {
+      "package": "com.dicearena.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      }
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
