@@ -2,6 +2,7 @@ const tseslint = require('@typescript-eslint/eslint-plugin');
 const tsParser = require('@typescript-eslint/parser');
 const expoConfig = require('eslint-config-expo/flat');
 const { defineConfig } = require('eslint/config');
+const path = require('path');
 
 module.exports = defineConfig([
   {
@@ -10,6 +11,7 @@ module.exports = defineConfig([
       '.expo/**',
       '.expo-shared/**',
       'dist/**',
+      '**/dist/**',
       'coverage/**',
       'android/**',
       'ios/**',
@@ -27,13 +29,18 @@ module.exports = defineConfig([
       parser: tsParser,
       parserOptions: {
         project: (filePath) => {
-          if (filePath.startsWith('apps/')) {
-            return './apps/mobile/tsconfig.json';
+          const normalizedPath = filePath.replaceAll('\\', '/');
+
+          if (normalizedPath.includes('/apps/mobile/')) {
+            return path.join(process.cwd(), 'apps/mobile/tsconfig.json');
           }
-          if (filePath.startsWith('packages/')) {
-            return './packages/game-domain/tsconfig.json';
+          if (normalizedPath.includes('/apps/server/')) {
+            return path.join(process.cwd(), 'apps/server/tsconfig.json');
           }
-          return './tsconfig.json';
+          if (normalizedPath.includes('/packages/game-domain/')) {
+            return path.join(process.cwd(), 'packages/game-domain/tsconfig.json');
+          }
+          return path.join(process.cwd(), 'tsconfig.json');
         },
         tsconfigRootDir: process.cwd(),
       },
