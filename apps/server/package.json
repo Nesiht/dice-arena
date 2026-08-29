@@ -8,6 +8,8 @@
     "build": "tsc --project tsconfig.build.json",
     "start": "tsx dist/server.js",
     "test": "jest --config ./jest.config.js --watch=false",
+    "test:persistence": "jest --config ./tests/persistence/jest.config.js --watch=false --runInBand",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "lint": "eslint src tests --ext .ts"
   },
   "dependencies": {
@@ -18,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.23.12",
     "typescript": "~5.9.2"
   }
