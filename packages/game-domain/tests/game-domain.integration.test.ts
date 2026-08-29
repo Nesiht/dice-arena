@@ -1,16 +1,12 @@
-import { type DiceRoll, type ScoreCategory } from '../../src/domain/game';
+import { type DiceRoll, type ScoreCategory } from '../src/game';
 import {
   createMatch,
   rollMatch,
   scoreMatchCategory,
   setMatchDieHeld,
   type MatchState,
-} from '../../src/domain/match';
-import {
-  calculateUpperBonus,
-  calculateUpperSubtotal,
-  isScorecardComplete,
-} from '../../src/domain/scorecard';
+} from '../src/match';
+import { calculateUpperBonus, calculateUpperSubtotal, isScorecardComplete } from '../src/scorecard';
 
 function scoreWithSingleRoll(
   match: MatchState,

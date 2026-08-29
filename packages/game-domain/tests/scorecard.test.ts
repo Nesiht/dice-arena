@@ -9,8 +9,8 @@ import {
   isScorecardComplete,
   scoreCategory,
   type Scorecard,
-} from '../../src/domain/scorecard';
-import { type DiceRoll } from '../../src/domain/game';
+} from '../src/scorecard';
+import { type DiceRoll } from '../src/game';
 
 describe('Scorecard domain', () => {
   describe('empty scorecard', () => {

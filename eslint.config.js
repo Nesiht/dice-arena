@@ -37,4 +37,23 @@ module.exports = defineConfig([
       'react/react-in-jsx-scope': 'off',
     },
   },
+  {
+    files: ['packages/**/*.{ts,tsx}'],
+    plugins: {
+      '@typescript-eslint': tseslint,
+    },
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: './packages/game-domain/tsconfig.json',
+        tsconfigRootDir: process.cwd(),
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      'import/order': 'off',
+      'react/react-in-jsx-scope': 'off',
+    },
+  },
 ]);

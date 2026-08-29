@@ -1,0 +1,15 @@
+{
+  "name": "@dice-arena/game-domain",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "jest --config ./jest.config.js --watch=false --runInBand",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.2"
+  }
+}

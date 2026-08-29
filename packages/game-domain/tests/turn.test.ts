@@ -5,9 +5,9 @@ import {
   scoreTurn,
   isScoringAllowed,
   TurnError,
-} from '../../src/domain/turn';
-import { createEmptyScorecard, isCategoryUsed, scoreCategory } from '../../src/domain/scorecard';
-import { type DiceRoll } from '../../src/domain/game';
+} from '../src/turn';
+import { createEmptyScorecard, isCategoryUsed, scoreCategory } from '../src/scorecard';
+import { type DiceRoll } from '../src/game';
 
 describe('Turn domain', () => {
   describe('initial state', () => {

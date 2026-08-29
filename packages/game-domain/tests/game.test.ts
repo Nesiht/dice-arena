@@ -4,7 +4,7 @@ import {
   isValidDieValue,
   rollDice,
   type DiceRoll,
-} from '../../src/domain/game';
+} from '../src/game';
 
 describe('game domain utilities', () => {
   it('accepts valid dice values', () => {

@@ -5,9 +5,9 @@ import {
   scoreMatchCategory,
   MatchError,
   type MatchState,
-} from '../../src/domain/match';
-import { isCategoryUsed } from '../../src/domain/scorecard';
-import { type DiceRoll, type ScoreCategory } from '../../src/domain/game';
+} from '../src/match';
+import { isCategoryUsed } from '../src/scorecard';
+import { type DiceRoll, type ScoreCategory } from '../src/game';
 
 describe('Match domain', () => {
   describe('match creation', () => {
