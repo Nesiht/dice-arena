@@ -190,6 +190,10 @@ Within one transaction, lock the match row with `SELECT ... FOR UPDATE`, validat
 
 The row lock serializes in-flight mutations for the same match; the version guard protects stale clients and guards against accidental paths that do not share the same lock. Do not rely on application-memory or distributed locks for correctness.
 
+### Transaction Scope Invariant
+
+A transaction-scoped database executor must never escape its transaction callback or be stored for later use. Production persistence code keeps every transaction-dependent operation inside `withTransaction(async (tx) => { ... })`. It must not rely on the database driver to reject a handle used after commit or rollback.
+
 For a race between a player action at version `12` and a timeout worker at version `12`, only one transition can commit version `13`. The other reloads and either observes a terminal/new state or reports a conflict. Realtime notification is published only after the transaction commits, because publishing first could expose a state that rolls back.
 
 ## Constraints and Indexes

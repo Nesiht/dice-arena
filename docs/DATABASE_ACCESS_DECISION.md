@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for the next persistence implementation task. This ADR selects a database access stack only; it does not install dependencies, define a schema in code, create migrations, or implement persistence.
+Accepted for the next persistence implementation task. The selected stack is Drizzle ORM with postgres.js. This ADR does not define a schema in code, create migrations, or implement persistence.
 
 ## Context
 
@@ -44,7 +44,7 @@ Drizzle provides a TypeScript schema model for PostgreSQL, typed query construct
 
 Drizzle is deliberately SQL-shaped. Its `sql` template parameterizes values while allowing table and column interpolation, arbitrary PostgreSQL expressions, `RETURNING`, and raw execution inside the same transaction. PostgreSQL row locking can remain an explicit lock clause or parameterized SQL rather than hidden behind ORM lifecycle behavior. A guarded update can use typed predicates and `returning`, then treat an empty returned set as a concurrency conflict.
 
-Drizzle supports both `pg` and `postgres.js`. Do not select either driver on convenience alone. Recent reports against stable `drizzle-orm` 0.45.2 identify node-postgres adapter risks relevant to this system: a pooled client can leak when `BEGIN` rejects, and a transaction handle can remain usable after commit or rollback. Those reports do not prove Drizzle is unusable, but they are material where correctness relies on pool recovery, idempotency, and row locks. They require a real-PostgreSQL transaction spike before selecting this adapter.
+Drizzle supports both `pg` and `postgres.js`. The completed real-PostgreSQL driver spike selected `postgres.js`; see [PostgreSQL Driver Spike Result](#postgresql-driver-spike-result). The node-postgres reports and transaction-handle lifecycle risk remain relevant implementation considerations, but do not prove Drizzle or node-postgres is unusable.
 
 Drizzle itself has no generated runtime client; `drizzle-kit` is a development dependency and can generate reviewable SQL migrations. Recent PostgreSQL introspection reports also show generate/pull asymmetry around checks, defaults, partitioned parents, and index opclasses. Therefore, generated migration SQL must be reviewed, committed, and tested in CI against a real PostgreSQL database. Do not use `drizzle-kit push` as the production migration mechanism.
 
@@ -108,11 +108,23 @@ Drizzle and Kysely tie numerically. Kysely keeps the critical transaction entire
 
 Adopt Drizzle ORM for `apps/server`. Its typed PostgreSQL schema and reviewable SQL migration generation break the numerical tie with Kysely for this small monorepo, while its parameterized `sql` escape hatch keeps the MatchAction lookup, `SELECT ... FOR UPDATE`, version-guarded `UPDATE ... RETURNING`, event insertion, and result write explicit.
 
-**Driver decision: defer.** Select between node-postgres and postgres.js only after a focused real-PostgreSQL transaction spike proves pooled concurrent requests, failed `BEGIN`, rollback, transaction timeout, and graceful server shutdown. The current node-postgres reports make a convenience-based choice unacceptable. A later driver decision may choose either supported adapter with pinned versions and documented acceptance results.
+### ADOPT: postgres.js
+
+Use `postgres.js` as Drizzle's PostgreSQL driver in `apps/server`. The real-PostgreSQL spike selected it narrowly over node-postgres based on clearer transaction and graceful shutdown APIs, not a performance benchmark.
+
+### NOT SELECTED: node-postgres
+
+node-postgres remains technically viable: it passed the same correctness-critical scenarios as postgres.js. It is not the primary Dice Arena driver because postgres.js had clearer transaction and shutdown ergonomics in the focused comparison.
 
 **Migration execution: generate migrations, review generated SQL, commit SQL migrations, and run them in CI/test PostgreSQL.** Do not use `drizzle-kit push` as the production migration mechanism. Hand-edit generated SQL where PostgreSQL evolution requires it, then review and test the resulting migration.
 
-The first persistence spike must prove against real PostgreSQL: `FOR UPDATE`; expected-version guarded update and exact affected-row result; rollback; simultaneous mutation conflict; failed `BEGIN` and pool recovery; idempotent retry without a second RNG call; atomic multiple event insertion; transaction timeout behavior; and graceful connection-pool shutdown. Mock-only testing is insufficient. API shape alone is not proof of correctness.
+## PostgreSQL Driver Spike Result
+
+The comparison ran against real PostgreSQL 16 at `127.0.0.1:5433`. Drizzle plus node-postgres and Drizzle plus postgres.js executed the same behavioral contract. Both passed `SELECT ... FOR UPDATE`, guarded updates and exact affected-row detection, concurrent mutation races, rollback atomicity, transaction-start-adjacent recovery, idempotent retry without repeated RNG, atomic multi-event insertion, lock timeout recovery, and graceful shutdown. No performance benchmark informed the decision.
+
+The transaction-start failure injected a deterministic SQL error immediately after a transaction started; it was not a literal rejected `BEGIN`. It demonstrated recovery after that controlled failure but must not be interpreted as proof of failed-`BEGIN` handling.
+
+Both tested adapters allowed a captured transaction executor to be used after commit and rollback. Therefore, a transaction-scoped database executor must never escape the transaction callback or be stored for later use. Production persistence code keeps all transaction-dependent work inside `withTransaction(async (tx) => { ... })`; it must not rely on either driver to prevent escaped-handle misuse.
 
 ### REJECT: Prisma for v1
 
@@ -148,24 +160,24 @@ Positive consequences:
 - Ordinary reads and writes receive typed schema/query assistance.
 - PostgreSQL transaction SQL remains directly legible and parameterized.
 - No generated runtime client or database model leaks into the domain.
-- `pg` supplies standard pooling suitable for stateless Fastify containers and managed PostgreSQL.
+- `postgres.js` supplies the selected pool and shutdown model for stateless Fastify containers and managed PostgreSQL.
 
 Negative consequences:
 
 - Developers must understand PostgreSQL transaction and migration behavior.
 - The mapper and JSONB runtime validation remain explicit work.
 - Some advanced operations intentionally use `sql` rather than a purely fluent API.
-- Stable Drizzle and the selected driver require a focused transaction spike and pinned versions.
+- Production code must enforce transaction callback scope rather than relying on driver handle lifecycle enforcement.
 
 Revisit this decision only if Drizzle loses maintenance or Node compatibility, the driver spike or migration/test workflow proves unreliable, PostgreSQL ceases to be the database architecture, or project/team scale materially changes the explicit-SQL versus generated-client tradeoff.
 
 ## First Implementation Step
 
-After approval, run the focused Drizzle driver/transaction spike against real PostgreSQL before production dependencies are selected. The spike must compare node-postgres and postgres.js for the documented failure and shutdown behavior. Do not combine it with gameplay endpoints or persistence use cases.
+Implement the server-owned persistence module with Drizzle ORM and postgres.js. Preserve explicit parameterized SQL where PostgreSQL-specific lock and version semantics are clearer than fluent APIs. Do not combine this decision task with gameplay endpoints or persistence use cases.
 
 ## Open Questions
 
-- Confirm the selected driver and exact pinned stable Drizzle/drizzle-kit versions after the transaction spike.
+- Confirm exact pinned stable Drizzle/postgres.js versions for the production persistence implementation.
 - Define local and CI real-PostgreSQL provisioning and migration deployment ownership.
 - Decide whether UUID generation occurs in PostgreSQL or the server application.
 - Specify the JSONB snapshot validator, state-schema migration protocol, and migration review/release process.
@@ -180,4 +192,4 @@ Research was performed on 2026-08-29 using current official sources:
 - Kysely docs: [getting started](https://kysely.dev/docs/getting-started), [transactions](https://kysely.dev/docs/examples/transactions/simple-transaction), and [migrations](https://kysely.dev/docs/migrations).
 - node-postgres docs: [transactions](https://node-postgres.com/features/transactions), [pooling](https://node-postgres.com/features/pooling), and [parameterized queries](https://node-postgres.com/features/queries).
 
-Published registry versions observed on that date: `drizzle-orm` 0.45.2, `drizzle-kit` 0.31.10, `@prisma/client` 7.10.0, `prisma` 8.0.0-rc.12, `kysely` 0.29.5, and `pg` 8.23.0. Prisma documentation identifies Prisma 8 as the current release line and Prisma 7 as supported; current Prisma 8 PostgreSQL setup requires Node 24+, while Dice Arena remains Node 22. Version choice remains deferred until implementation because this ADR must not install dependencies.
+Published registry versions observed on that date: `drizzle-orm` 0.45.2, `drizzle-kit` 0.31.10, `@prisma/client` 7.10.0, `prisma` 8.0.0-rc.12, `kysely` 0.29.5, and `pg` 8.23.0. Prisma documentation identifies Prisma 8 as the current release line and Prisma 7 as supported; current Prisma 8 PostgreSQL setup requires Node 24+, while Dice Arena remains Node 22. The focused real-PostgreSQL spike subsequently selected postgres.js as Drizzle's driver.
