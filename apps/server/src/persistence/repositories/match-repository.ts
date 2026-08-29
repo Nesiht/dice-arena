@@ -81,6 +81,14 @@ export const createUser = async (
   await transaction`INSERT INTO users (id, display_name) VALUES (${id}, ${displayName})`;
 };
 
+export const findExistingUserIds = async (
+  transaction: TransactionSql,
+  userIds: readonly string[],
+): Promise<readonly string[]> => {
+  const rows = await transaction<{ id: string }[]>`SELECT id FROM users WHERE id = ANY(${userIds})`;
+  return rows.map((row) => row.id);
+};
+
 export const createMatchRecord = async (
   transaction: TransactionSql,
   match: NewMatch,

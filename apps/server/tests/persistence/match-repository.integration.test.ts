@@ -4,7 +4,9 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { createMatch } from '@dice-arena/game-domain';
 
 import { getRequiredDatabaseUrl } from '../../src/config/database';
+import { CreateMatchError, createMatchUseCase } from '../../src/application/matches/create-match';
 import { createPersistenceClient } from '../../src/persistence/db/client';
+import { createCreateMatchPersistence } from '../../src/persistence/adapters/create-match-persistence';
 import { withTransaction } from '../../src/persistence/db/transaction';
 import {
   ConcurrencyConflictError,
@@ -30,6 +32,12 @@ const makeMatch = () => {
   const playerBId = randomUUID();
   return { id: randomUUID(), playerAId, playerBId, state: createMatch(playerAId, playerBId) };
 };
+const countRows = async (tableName: 'matches' | 'match_participants'): Promise<number> => {
+  const [row] = await client.sqlClient<
+    { count: number }[]
+  >`SELECT COUNT(*)::int AS count FROM ${client.sqlClient(tableName)}`;
+  return row?.count ?? 0;
+};
 
 beforeAll(async () => {
   await migrate(client.db, { migrationsFolder: 'src/persistence/migrations' });
@@ -44,6 +52,124 @@ afterAll(async () => {
 });
 
 describe('Match repository with PostgreSQL', () => {
+  it('creates an active match through the CreateMatch application path', async () => {
+    const playerAId = randomUUID();
+    const playerBId = randomUUID();
+    await withTransaction(client.sqlClient, async (transaction) => {
+      await createUser(transaction, playerAId, 'A');
+      await createUser(transaction, playerBId, 'B');
+    });
+    const result = await createMatchUseCase(createCreateMatchPersistence(client.sqlClient), {
+      playerAUserId: playerAId,
+      playerBUserId: playerBId,
+    });
+    await withTransaction(client.sqlClient, async (transaction) => {
+      const match = await loadMatch(transaction, result.matchId);
+      expect(match).toMatchObject({ status: 'ACTIVE', version: 0 });
+      expect(match?.state).toEqual(createMatch(playerAId, playerBId));
+      expect(match?.state.activePlayerId).toBe(playerAId);
+      expect(
+        (
+          await transaction`SELECT seat, result, final_score FROM match_participants WHERE match_id = ${result.matchId} ORDER BY seat`
+        ).map((row) => row.seat),
+      ).toEqual(['A', 'B']);
+    });
+  });
+
+  it('rolls back the CreateMatch application path when persistence fails after match insert', async () => {
+    const playerAId = randomUUID();
+    const playerBId = randomUUID();
+    await withTransaction(client.sqlClient, async (transaction) => {
+      await createUser(transaction, playerAId, 'A');
+      await createUser(transaction, playerBId, 'B');
+    });
+    await client.sqlClient.unsafe(`
+      CREATE OR REPLACE FUNCTION fail_create_match_participants_for_test()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        RAISE EXCEPTION 'forced create match persistence rollback';
+      END;
+      $$;
+
+      CREATE TRIGGER fail_create_match_participants_for_test
+      BEFORE INSERT ON match_participants
+      FOR EACH STATEMENT
+      EXECUTE FUNCTION fail_create_match_participants_for_test();
+    `);
+
+    try {
+      await expect(
+        createMatchUseCase(createCreateMatchPersistence(client.sqlClient), {
+          playerAUserId: playerAId,
+          playerBUserId: playerBId,
+        }),
+      ).rejects.toThrow('forced create match persistence rollback');
+    } finally {
+      await client.sqlClient.unsafe(`
+        DROP TRIGGER IF EXISTS fail_create_match_participants_for_test ON match_participants;
+        DROP FUNCTION IF EXISTS fail_create_match_participants_for_test();
+      `);
+    }
+
+    expect(await countRows('matches')).toBe(0);
+    expect(await countRows('match_participants')).toBe(0);
+  });
+
+  it('rejects a CreateMatch request with the same player twice without writing rows', async () => {
+    const playerId = randomUUID();
+    await withTransaction(client.sqlClient, async (transaction) => {
+      await createUser(transaction, playerId, 'A');
+    });
+
+    await expect(
+      createMatchUseCase(createCreateMatchPersistence(client.sqlClient), {
+        playerAUserId: playerId,
+        playerBUserId: playerId,
+      }),
+    ).rejects.toThrow(CreateMatchError);
+
+    expect(await countRows('matches')).toBe(0);
+    expect(await countRows('match_participants')).toBe(0);
+  });
+
+  it('rejects a CreateMatch request when player A is missing without writing rows', async () => {
+    const playerAId = randomUUID();
+    const playerBId = randomUUID();
+    await withTransaction(client.sqlClient, async (transaction) => {
+      await createUser(transaction, playerBId, 'B');
+    });
+
+    await expect(
+      createMatchUseCase(createCreateMatchPersistence(client.sqlClient), {
+        playerAUserId: playerAId,
+        playerBUserId: playerBId,
+      }),
+    ).rejects.toThrow(CreateMatchError);
+
+    expect(await countRows('matches')).toBe(0);
+    expect(await countRows('match_participants')).toBe(0);
+  });
+
+  it('rejects a CreateMatch request when player B is missing without writing rows', async () => {
+    const playerAId = randomUUID();
+    const playerBId = randomUUID();
+    await withTransaction(client.sqlClient, async (transaction) => {
+      await createUser(transaction, playerAId, 'A');
+    });
+
+    await expect(
+      createMatchUseCase(createCreateMatchPersistence(client.sqlClient), {
+        playerAUserId: playerAId,
+        playerBUserId: playerBId,
+      }),
+    ).rejects.toThrow(CreateMatchError);
+
+    expect(await countRows('matches')).toBe(0);
+    expect(await countRows('match_participants')).toBe(0);
+  });
+
   it('commits a locked, guarded state update with events and action atomically', async () => {
     const match = makeMatch();
     await withTransaction(client.sqlClient, async (transaction) => {
