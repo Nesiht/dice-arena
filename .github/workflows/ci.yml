@@ -31,5 +31,8 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
+      - name: Run type check (mobile)
+        run: npm run typecheck --workspace=@dice-arena/mobile
+
       - name: Run tests
         run: npm test

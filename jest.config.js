@@ -1,6 +1,8 @@
 module.exports = {
-  preset: '@react-native/jest-preset',
   testEnvironment: 'node',
   testMatch: ['**/tests/**/*.test.ts?(x)'],
-  collectCoverageFrom: ['src/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}', '!**/*.d.ts'],
+  transform: {
+    '^.+\\.(ts|tsx)$': ['babel-jest', { presets: ['babel-preset-expo'] }],
+  },
+  collectCoverageFrom: ['apps/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}', '!**/*.d.ts'],
 };
